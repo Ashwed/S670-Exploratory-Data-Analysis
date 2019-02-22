@@ -1,0 +1,484 @@
+---
+title: "Non State Actor (NSA) Mass Atrocities"
+author: "Ashwed Patil, Vatsal Jatakia, Saniya Ambavanekar, Akshay Naik (Team San Diego)"
+date: "April 27th, 2018"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, echo = FALSE, tidy = TRUE, message = FALSE)
+set.seed(470670)
+```
+
+###Research Question
+
+**Given that a non state actor commits mass atrocity, what conditions make it worse?**
+
+The recent surge in rebel conflicts such as those by Islamic State in Iraq and Syria (ISIS) has led to an urgent need in examining their characteristics for policy research in politics and international relations. Armed conflicts often take place in heavily populated areas and can significantly affect the cultural, economic and social conditions of a region. Understanding the behavior of these groups can be of significant help to policy interventions in conflict resolution, peace negotiations and humanitarian relief. Using a data driven approach, our project aims to answer some key research questions pertaining to these nonstate actor mass atrocities. 
+
+### Basic Terminologies and Data Description
+
+**Non State Actor** : In political science and international relations, a state actor is an individual or an entity that is officially recognized or supported by a sovereign government. For example, the United States Government or the FBI or CIA are state actors.
+
+A non state actor is an individual or an entity which has considerable political influence but is not official supported by a sovereign government. Notable examples of non state actors include terrorist organizations like ISIS and Al Qaeda. 
+
+**Mass Atrocity** : There is no universally accepted definition of a mass atrocity but it generally refers to large scale and deliberate attacks on civilian population. 
+
+#### Data
+The source of our data is the Non-State Actor Mass Atrocities dataset (Dataset's Homepage) compiled by Dr. Cyanne E. Loyle, an assistant professor at IU's Political Science department [1]. The dataset contains 501 observations on 36 variables related to NSA conflicts. Because there is no universally accepted definition of NSAs, the original creator of the dataset has defined a nonstate actor as rebel groups and pro-government militias (PGMs) only. Additionally, the dataset includes only those groups that have been formed between 1 January 1989 to 31 December 2007. Our variables of interest from the dataset are divided into three categories:
+
+**I. IDENTIFICATION VARIABLES**
+
+ - **UCDPID** (ucdpid): UCDP (Uppasala Conflict Data program) ID for the conflict in which a group was involved. 
+- **Country** (country): Country name in which the armed conflict is taking place.
+- **Regime Type** (regime_type): Regime type for the country in which the armed conflict is taking place, averaged over the groups lifespan. 0 = Democracy, 1 = Anocracy, 2 = Autocracy.
+- **Region** (region): Within which region does conflict occur? 1 = Europe, 2 = Middle East, 3 = Asia, 4 = Africa, 5 = Americas, Semi-official (refers to disputed territories)
+- **Total Civilian Deaths** (deaths_civilians): Estimated number of civilian deaths attributed to NSA group
+
+**II. GROUP CHARACTERISTICS**
+
+- **PGM** (pgm): Codes whether or not the group is a pro-government militia. 0= No, 1= Yes 
+- **Rebel** (rebel): Codes whether or not the group is a rebel group. 0= No, 1= Yes 
+- **Group Duration** (group_duration): Records how many years between 1989 and 2007 a group is active. 
+- **Islamist** (islamist): Codes whether or not a group expresses an islamist ideology. 0= No, 1= Yes.
+- **Ethnic Membership** (ethnic_membership): Records whether or not the group recruits ethnically. 0= No, 1= Yes 
+- **Political Party Link** (pol_party_link): Codes whether or not the group has a link to an existing political party. 0= Group not linked to a political party, 1= Group is linked to a political party
+
+**III. CONFLICT CHARACTERISTICS**
+
+- **Incompatibility** (incompatibility): What is the primary incompatibility of the conflict. 1 = Incompatibility concerning territory, 2 = Incompatibility concerning government 
+- **Battle Deaths** (battle_deaths_total): How many total battle deaths occurred in the conflict between 1989 and 2007(continuous). This variable was found to be right skewed and hence was log transformed.
+- **Rebels in Conflict** (rebels_in_conflict): Total number of rebel groups in the armed conflict in which a NSA group is active 
+
+```{r warning = FALSE, echo = FALSE, tidy = TRUE, message = FALSE }
+library(dplyr)
+library(MASS)
+library(arm)
+library(tidyr)
+library(ggplot2)
+
+#Removing missing values
+nsa_data=read.csv('NSA.csv')
+nsa1 = nsa_data[!is.na(nsa_data$ucdpid), ]
+nsa1 = nsa1[!is.na(nsa1$deaths_civilians),]
+
+### Selecting the important columns
+col1 = c('ucdpid','regime_type','gdp','region','pgm','rebel','group_duration','islamist','pol_party_link','sepratist','conflict_duration','deaths_civilians','battle_deaths_total','state_civ_deaths','state_atrocity_binary','incompatibility','ethnic_membership','rebels_in_conflict', 'country')
+nsa1 = nsa1[,(colnames(nsa1) %in% col1)]
+
+nsa1 = subset(nsa1, deaths_civilians != 0)
+death_civilians_break=c(-Inf,50,200,500,Inf)
+nsa1$death_civilian_cat=cut(nsa1$deaths_civilians,breaks = death_civilians_break,include.lowest = TRUE)
+levels(nsa1$death_civilian_cat)<-c('Low','Medium','High','Very High')
+nsa1$death_civilian_cat<-factor(nsa1$death_civilian_cat,levels =c('Low','Medium','High','Very High'),ordered = T )
+
+#### RECODING FACTORS
+
+nsa1$pgm = ifelse(nsa1$pgm == 0, "No", "Yes")
+nsa1$pgm = factor(nsa1$pgm,levels = c('No','Yes'),ordered = T)
+
+nsa1$rebel = ifelse(nsa1$rebel == 0, "No", "Yes")
+nsa1$rebel = factor(nsa1$rebel,levels = c('No','Yes'),ordered = T)
+
+nsa1$islamist = ifelse(nsa1$islamist == 0, "No", "Yes")
+nsa1$islamist = factor(nsa1$islamist,levels = c('No','Yes'),ordered = T)
+
+nsa1$ethnic_membership = ifelse(nsa1$ethnic_membership == 0, "No", "Yes")
+nsa1$ethnic_membership = factor(nsa1$ethnic_membership,levels = c('No','Yes'),ordered = T)
+
+
+nsa1$pol_party_link = ifelse(nsa1$pol_party_link == 0, "No", "Yes")
+nsa1$pol_party_link = factor(nsa1$pol_party_link,levels = c('No','Yes'),ordered = T)
+
+nsa1$state_atrocity_binary = ifelse(nsa1$state_atrocity_binary == 0, "No", "Yes")
+nsa1$state_atrocity_binary = factor(nsa1$state_atrocity_binary,levels = c('No','Yes'),ordered = T)
+
+nsa1$incompatibility = ifelse(nsa1$incompatibility == 1, "territory", "government")
+nsa1$incompatibility = factor(nsa1$incompatibility,levels = c('territory','government'),ordered = T)
+
+nsa1$regime_type_cat[nsa1$regime_type==0]<-'Democracy'
+nsa1$regime_type_cat[nsa1$regime_type==1]<-'Anocracy'
+nsa1$regime_type_cat[nsa1$regime_type==2]<-'Autocracy'
+nsa1$regime_type_cat=factor(nsa1$regime_type_cat,levels = c('Democracy','Anocracy','Autocracy'))
+
+nsa1$region = recode_factor(nsa1$region, "1" = "Europe", "2" = "Middle East", "3" = "Asia", "4" = "Africa", "5" = "Americas", "semiofficial" = "Semi-official")
+
+nsa1$battle_deaths_log = log10(nsa1$battle_deaths_total)
+```
+
+### Univariate Summaries
+
+A quick summary of our data based on the group and conflict characteristics is given below:
+
+**Country Wise Statistics**
+```{r  warning = FALSE, echo = FALSE, tidy = TRUE, message = FALSE}
+library(knitr)
+#Country Wise Statistics
+nsa1$country = gsub(",.*","",nsa1$country)
+country.kable = summarise(group_by(nsa1, country), sum(deaths_civilians)) 
+names(country.kable) = c("Country", "Deaths")
+death.order = order(country.kable$Deaths, decreasing = TRUE)
+country.kable = country.kable[death.order, ]
+country.kable = head(country.kable, n = 10)
+kable(country.kable)
+
+```
+
+**Group and Conflict Variable Summaries**
+```{r warning = FALSE, echo = FALSE, tidy = TRUE, message = FALSE}
+
+#Group and Conflict Variables
+islamist.kable = summarise(group_by(nsa1, islamist), sum(deaths_civilians))
+islamist.kable$Variable = "Islamist"
+names(islamist.kable) = c("Value", "Deaths", "Variable")
+pol.kable = summarise(group_by(nsa1, pol_party_link), sum(deaths_civilians))
+pol.kable$Variable = "Political Party Link"
+names(pol.kable) = c("Value", "Deaths", "Variable")
+ethnic.kable = summarise(group_by(nsa1, ethnic_membership), sum(deaths_civilians))
+ethnic.kable$Variable = "Ethnic Membership"
+names(ethnic.kable) = c("Value", "Deaths", "Variable")
+incom.kable = summarise(group_by(nsa1, incompatibility), sum(deaths_civilians))
+incom.kable$Variable = "Incompatibility Type"
+names(incom.kable) = c("Value", "Deaths", "Variable")
+
+regime.kable = summarise(group_by(nsa1, regime_type_cat), sum(deaths_civilians))
+regime.kable$Variable = "Regime Type"
+names(regime.kable) = c("Value", "Deaths", "Variable")
+
+pgm.kable = summarise(group_by(nsa1, pgm), sum(deaths_civilians))
+pgm.kable$Variable = "PGM Group"
+names(pgm.kable) = c("Value", "Deaths", "Variable")
+
+rebel.kable = summarise(group_by(nsa1, rebel), sum(deaths_civilians))
+rebel.kable$Variable = "Rebel Group"
+names(rebel.kable) = c("Value", "Deaths", "Variable")
+
+all.kable = rbind(islamist.kable, pol.kable, ethnic.kable, incom.kable, regime.kable, pgm.kable, rebel.kable)
+row.names(all.kable) = c()
+all.kable = subset(all.kable, select = c("Variable", "Value", "Deaths"))
+kable(all.kable)
+```
+
+The results line up with facts and conventional wisdom. The mass atrocities committed by nonstate actors between 1989 and 2007 took
+place during four major conflicts: (a) the international war in the Democratic Republic of Congo (Zaire), (b) The breakup of former Yugoslavia (c) conflict in Iraq and (d) the civil war in Liberia. It seems that most of the conflicts took place in Asia, Africa and the Middle East.
+
+The group and conflict characteristics also reveal some important insights. Ethnic Membership seems to be an important factor contributing to mass atrocities. Most of the atrocities seem to happen in autocracies (dictatorships) and this correlates with the deaths associated by incompability type due to government. 
+
+**Response Variable**
+
+We define our resoponse variable as **Mass Atrocity Intensity** (death_civilian_cat) which is constructed from *deaths_civilians* as follows:
+
+- **Low**: Civilian Deaths less than 50
+- **Medium**: Civilian Deaths between 50 and 200
+- **High**: Civilian Deaths between 200 and 500
+- **Very High**: Civilian Deaths greater than 500
+
+After preprocessing our data, we study the 119 observations of non state actor mass atrocities. The response variable is summarized below:
+
+```{r warning = FALSE, echo = FALSE, tidy = TRUE, message = FALSE}
+
+
+mass_atrocity_intensity.kable = summarise(group_by(nsa1, death_civilian_cat), n())
+names(mass_atrocity_intensity.kable) = c("Atrocity Intensity", "Observations")
+kable(mass_atrocity_intensity.kable)
+
+```
+
+**Graphical Summaries and Statistics**
+
+
+```{r warning = FALSE, echo = FALSE, tidy = TRUE, message = FALSE, fig.width=10}
+library(grid)
+library(gridExtra)
+
+nsa1 = subset(nsa1, nsa1$battle_deaths_total < 22000)
+ggplot(nsa1, aes(battle_deaths_total, death_civilian_cat, col = incompatibility))+geom_point()+geom_jitter(height = 0.1, width = 0.1) + facet_wrap(~region)+ labs(title = "Atrocity Intensity by Battle Deaths based on Incompatibility Type", x = "Total Battle Deaths (<22,000)", y = "Mass Atrocity Intensity", col = "Incompatibility Type")
+
+```
+The above plot shows how atrocity intensity is affected by battle deaths and incompatibility types. Clearly, there is a difference in atrocity patterns across different regions. Atrocities in Asia and Africa are primarily due to groups conflicting with the government while those in semi official regions are unsurprisingly due to territorial disputes. 
+
+```{r warning = FALSE, echo = FALSE, tidy = TRUE, message = FALSE, fig.width = 10, fig.height=7}
+
+plot1 = ggplot(nsa1, aes(ethnic_membership, death_civilian_cat, col = rebel))+geom_point()+geom_jitter(height = 0.1, width = 0.1) + facet_wrap(~region)+
+  labs(title = "Atrocity Intensity by Rebel Groups based on Ethnic Membership", x = "Does the group recruit based on ethnic membership?", y = "Mass Atrocity Intensity", col = "Is the group a rebel group?")
+
+plot2 = ggplot(nsa1, aes(ethnic_membership, death_civilian_cat, col = pgm))+geom_point()+geom_jitter(height = 0.1, width = 0.1) + facet_wrap(~region)+
+  labs(title = "Atrocity Intensity by PGM Groups based on Ethnic Membership", x = "Does the group recruit based on ethnic membership?", y = "Mass Atrocity Intensity", col = "Is the group a PGM group?")
+
+
+
+grid.arrange(plot1, plot2, ncol = 1)
+
+```
+
+The above plots reveal that there is a sharp difference in the patterns of atrocities committed by rebel and PGM (Pro Government Militia) groups. Most of the rebel groups in Asia, Africa and Middle East tend to hire based on ethnic membership while PGM groups don't. This aligns with the fact that most of the rebel groups (like ISIS) are primarily formed on the basis of some form of ethnic ideologies (Wahabbi Islam) with their primary motive being replacing the current government with their own type of governance. 
+
+
+## Interaction between Group Characteristics and Conflict Characteristics
+
+The figure on the next page shows the relationship between group and conflict variables. It seems that battle deaths are the highest when the group tends to hire by ethnic membership but is not islamist and the conflict is primarily due to issues with the government. Thus, it seems that while Islamist and Ethnic Membership might not be strongly correlatec (or somewhat), there is an interaction between these two with incompatibility type and battle deaths. 
+
+```{r warning = FALSE, echo = FALSE, tidy = TRUE, message = FALSE, fig.height=5}
+
+
+ggplot(nsa1, aes(islamist, incompatibility, col = battle_deaths_total))+geom_point()+geom_jitter(height = 0.1, width = 0.1) +  facet_wrap(~ethnic_membership) + scale_color_gradientn(colours = terrain.colors(10)) +
+  labs(title = "Interaction between Group and Conflict Variables", x = "Is the group Islamist?", y = "Conflict Incompatibility Type", col = "Total Battle Deaths", subtitle = "(Faceted by Ethnic Membership)")
+
+```
+
+## Predicting the likelihood of Mass Atrocity Event Intensity from Group and Conflict Characteristics
+
+We now use **ordered logistic regression** to model the likelihood of an atrocity event due to group variables Islamist and Ethnic Membership and conflict variables Battle Deaths and Incompatibility. The variable Battle Deaths was log transformed due to right skewness. The model was considered on the full sample with distinguishing the groups as Rebel or PGMs.
+
+The figure on the next page shows the fits for the models with and without interactions (between incompatibility, battle deaths and islamist variables). Row-wise, The plot is faceted by Incompatibility Type (government or territory) and Etnic Membership (Yes or No) while the columns indicate the atrocity intensity level. 
+
+Clearly, having an interaction makes a difference. The most noticable difference is when the atrocity event intensity is categorized as 'Very High'. It seems that the atrocity event has a probability of getting worse whenever a group recruits based on ethnic membership and the conflict is involved due to dispute with the government. Groups involved in conflicts due to territory don't necessarily tend to hire based on ethnic groups. In conditions where the civilian deaths are between 50 to 200 (medium), the atrocity intensity tends to get worse except when the conflict is involved with regards to a territory and the NSA group doesn't hire based on ethnic groups. 
+
+```{r warning = FALSE, echo = FALSE, tidy = TRUE, message = FALSE}
+all.model.nointer=polr(death_civilian_cat~incompatibility+battle_deaths_log+islamist+ethnic_membership,data=nsa1)
+
+
+all.model.inter=polr(death_civilian_cat~incompatibility*battle_deaths_log*islamist+ethnic_membership,data=nsa1)
+
+all.df=expand.grid(incompatibility=c('territory','government'),battle_deaths_log=min(nsa1$battle_deaths_log):max(nsa1$battle_deaths_log),islamist=c('No','Yes'),ethnic_membership=c('No','Yes'))
+
+#With interaction
+all.pred.inter=predict(all.model.inter,all.df,type='probs')
+all.pred.inter.df=data.frame(all.df,all.pred.inter)
+names(all.pred.inter.df)=c('incompatibility','battle_deaths_log','islamist','ethnic_membership','Low','Medium','High','Very High')
+all.pred.inter.df=all.pred.inter.df%>%gather(inter_death_civilians,InterProbability,5:8)
+all.pred.inter.df$inter_death_civilians=factor(all.pred.inter.df$inter_death_civilians,levels = c('Low','Medium','High','Very High'))
+
+
+#Without interaction
+all.pred.nointer=predict(all.model.nointer,all.df,type='probs')
+all.pred.nointer.df=data.frame(all.df,all.pred.nointer)
+names(all.pred.nointer.df)=c('incompatibility','battle_deaths_log','islamist','ethnic_membership','Low','Medium','High','Very High')
+all.pred.nointer.df=all.pred.nointer.df%>%gather(Nointer_death_civilians,NointerProbability,5:8)
+all.pred.nointer.df$nointer_death_civilians=factor(all.pred.nointer.df$Nointer_death_civilians,levels = c('Low','Medium','High','Very High'))
+
+
+#Final dataframe
+all.final.df<-data.frame(all.df,all.pred.inter.df$inter_death_civilians,all.pred.inter.df$InterProbability,all.pred.nointer.df$NointerProbability)
+
+ggplot(all.final.df,aes(x=all.final.df$battle_deaths_log))+geom_smooth(method = 'lm',aes(y=all.final.df$all.pred.inter.df.InterProbability,color='Interaction'),se=FALSE)+geom_smooth(method='lm',aes(y=all.final.df$all.pred.nointer.df.NointerProbability,color='NoInteraction'),se=FALSE)+facet_grid(all.final.df$ethnic_membership+all.final.df$incompatibility~all.final.df$all.pred.inter.df.inter_death_civilians)+labs(title = 'Mass Atrocity Likelihood by Group and Conflict Variables', x ='Log Battle Deaths', y = 'Likelihood of Mass Atrocity Event', subtitle = "Faceted Row-wise by Incompatibility Type (government or territory) and Ethnic Membership (yes or no)")
+
+```
+
+
+## Mass Atrocity Event Characteristics for PGM and Rebel Groups
+
+Our descriptive and graphical summaries revealed that there is a noticable difference in how PGM and Rebel groups conduct mass atrocities. We decided to dive deeper and investigate separate models for PGM and Rebel groups. 
+
+### Rebel Only
+
+Based on our exploration, we noticed that our variables of interest that fall in the conflict characteristics (Incompatibility, Battle Deaths and Rebels in Conflict) have no effect on the response variable for the rebel only sample. The model for atrocity event predicted by conflict characteristics for rebel only sample is provided in the Appendix for reference on this. In this section, We only consider the group characteristics (Islamist, Political Party Link and Group Duration) to predict our response variable.
+
+From the second plot on the next page, it is somewhat clear that Islamist parties tend to stay for longer years in the conflict when they are not linked with political parties and vice versa.
+
+```{r warning = FALSE, echo = FALSE, tidy = TRUE, message = FALSE, fig.height=5}
+
+nsa_rebel<-subset(nsa1,nsa1$rebel=='Yes')
+
+plot5 = ggplot(nsa_rebel, aes(x = rebels_in_conflict, y = battle_deaths_total)) + geom_point() + facet_wrap(~incompatibility) + geom_jitter(height = 0.1, width = 0.1) + labs(title = "Conflict Variables do not interact in Rebel Only Sample", x = "Rebels in Conflicts", y = "Total Battle Deaths", subtitle = "Faceted by Incompatibility Type")
+
+plot6 = ggplot(nsa_rebel, aes(x = pol_party_link, y = islamist, col = group_duration)) + geom_point()  + geom_jitter(height = 0.1, width = 0.1) + scale_color_distiller(palette = "PuOr") + labs(title = "Are Political Party and Islamist Variables related?", x = "Political Party Link", y = "Is the group Islamist?", subtitle = "Colored by Group Duration", col = "Group Duration")
+
+grid.arrange(plot5, plot6, ncol = 1)
+```
+
+
+**Predicting Mass Atrocity Intensity for Rebel Only Sample**
+
+We fit an ordered logistic regression model that predicts the mass atrocity likelihood based on the group characteristics for rebel only sample. The plot on the next page displays the fit of the model with and without interaction. The interaction makes a difference when atrocity deaths are greater than 500 (Very High). It seems that the atrocity events worsens when the group stays for a longer duration and is both an Islamist and linked to a political group. The atrocity events tends to not worsen when the group is not an islamist but is linked to a political party. This correlates with an important observation on Colombia's FARC (Revolutionary Armed Forces of Colombia) which started as a rebel group but later aligned with a poltical party to negotiate a peace deal. 
+
+
+```{r warning = FALSE, echo = FALSE, tidy = TRUE, message = FALSE }
+
+model.rebelg.nointer=polr(death_civilian_cat~group_duration+islamist+pol_party_link,data=nsa_rebel)
+
+
+model.rebelg.inter=polr(death_civilian_cat~group_duration+islamist*pol_party_link,data=nsa_rebel)
+
+rebelg.df<-expand.grid(group_duration=min(nsa_rebel$group_duration):max(nsa_rebel$group_duration),islamist=c('No','Yes'),pol_party_link=c('No','Yes'))
+
+
+#With interaction
+rebelg.pred.inter<-predict(model.rebelg.inter,rebelg.df,type='probs')
+rebelg.pred.inter.df<-data.frame(rebelg.df,rebelg.pred.inter)
+names(rebelg.pred.inter.df)<-c('group_duration','islamist','pol_party_link','Low','Medium','High','Very High')
+rebelg.pred.inter.df=rebelg.pred.inter.df%>%gather(inter_death_civilians,InterProbability,4:7)
+rebelg.pred.inter.df$inter_death_civilians=factor(rebelg.pred.inter.df$inter_death_civilians,levels = c('Low','Medium','High','Very High'))
+
+
+#Without interaction
+rebelg.pred.nointer<-predict(model.rebelg.nointer,rebelg.df,type='probs')
+rebelg.pred.nointer.df<-data.frame(rebelg.df,rebelg.pred.nointer)
+names(rebelg.pred.nointer.df)<-c('group_duration','islamist','pol_party_link','Low','Medium','High','Very High')
+rebelg.pred.nointer.df=rebelg.pred.nointer.df%>%gather(nointer_death_civilians,NointerProbability,4:7)
+rebelg.pred.nointer.df$nointer_death_civilians=factor(rebelg.pred.nointer.df$nointer_death_civilians,levels = c('Low','Medium','High','Very High'))
+
+#Final dataframe
+rebelg.final.df<-data.frame(rebelg.df,rebelg.pred.inter.df$inter_death_civilians,rebelg.pred.inter.df$InterProbability,rebelg.pred.nointer.df$NointerProbability)
+
+#Plotting the interactions
+ggplot(rebelg.final.df,aes(x=rebelg.final.df$group_duration))+geom_line(aes(y=rebelg.final.df$rebelg.pred.inter.df.InterProbability,color='Interaction'))+geom_line(aes(y=rebelg.final.df$rebelg.pred.nointer.df.NointerProbability,color='NoInteraction'))+facet_grid(rebelg.final.df$islamist+rebelg.final.df$pol_party_link~rebelg.final.df$rebelg.pred.inter.df.inter_death_civilians)+
+  labs(title = "Likelihood of Mass Atrocity Event in Rebel Groups", x = "Group Duration", y = "Likelihood of Mass Atrocity Event", subtitle = "Rows Faceted by Islamist (Upper facet) and Political Party Link (Lower facet) (yes or not)", col = "Interaction Type")
+
+
+```
+
+## Pro Government Militias (PGM) Only
+
+In contrast to Rebel only sample, the PGM only sample is significantly affected by conflict characteristics and not by group characteristics. Hence, We do not consider group variables in the model described in this section.
+
+The second plot on the next page shows the relation between battle deaths and the number of rebels in conflict. Our reason to select the variable *rebels_in_conflict* (number of rebel groups in conflict) was that PGM groups and rebel groups tend to clash with each other during conflicts, this could be indicative of the atrocity event. 
+
+### Predicting Mass Atrocity Intensity in PGM Only Sample
+We fit an ordered logistic regression model that predicts the mass atrocity likelihood based on the conflict characteristics for PGM only sample. For the model, we converted the *rebels_in_conflict* variable to two categories (Low RG and High RG) based on it's value above or below the median. The  third plot on the next page displays the fit of the model with and without interaction. Having an interaction doesn't really make any difference except for a few cases. For low and medium intensity atrocities related to incompatibility with the government, their likelihood surprisingly decreases as battle deaths increase. In case of territorial conflicts, the atrocity intensity increases slightly with battle deaths and rebel group numbers. 
+
+```{r}
+nsa_pgm<-subset(nsa1,nsa1$pgm=='Yes')
+
+plot7 = ggplot(nsa_pgm, aes(x = group_duration, y = islamist)) + geom_point()  + geom_jitter(height = 0.1, width = 0.1) + facet_wrap(~pol_party_link) + labs(title = "Group Variables do not affect PGM Only Sample", x = "Group Duration", y = "Is the group Islamist?", subtitle = "Faceted by Political Party Link")
+
+plot8 = ggplot(nsa_pgm, aes(x = rebels_in_conflict, y  = battle_deaths_total)) + geom_point() + facet_wrap(~incompatibility) + geom_jitter(width = 0.5) + labs(title = "How do the rebel group numbers affect battle deaths?", x = "Rebel Groups in Conflicts", y = "Total Battle Deaths", subtitle = "Faceted by Incompatibility Type")
+
+grid.arrange(plot7, plot8, ncol = 1)
+```
+
+
+```{r fig.width = 22, fig.height = 10}
+#Fitting model
+model.pgmc.nointer=polr(death_civilian_cat~incompatibility+battle_deaths_log+rebels_in_conflict,data=nsa_pgm,Hess = TRUE)
+
+
+
+model.pgmc.inter<-polr(death_civilian_cat~incompatibility*battle_deaths_log*rebels_in_conflict,data=nsa_pgm,Hess = TRUE)
+
+
+pgmc.df<-expand.grid(incompatibility=c('government','territory'),battle_deaths_log=min(nsa_pgm$battle_deaths_log):max(nsa_pgm$battle_deaths_log),rebels_in_conflict=min(nsa_pgm$rebels_in_conflict):max(nsa_pgm$rebels_in_conflict))
+
+#With interaction
+pgmc.pred.inter<-predict(model.pgmc.inter,pgmc.df,type='probs')
+pgmc.pred.inter.df<-data.frame(pgmc.df,pgmc.pred.inter)
+names(pgmc.pred.inter.df)<-c('incompatibility','battle_deaths_log','rebels_in_conflict','Low','Medium','High','Very High')
+pgmc.pred.inter.df=pgmc.pred.inter.df%>%gather(inter_death_civilians,InterProbability,4:7)
+pgmc.pred.inter.df$inter_death_civilians=factor(pgmc.pred.inter.df$inter_death_civilians,levels = c('Low','Medium','High','Very High'))
+
+
+#Without interaction
+pgmc.pred.nointer<-predict(model.pgmc.nointer,pgmc.df,type='probs')
+pgmc.pred.nointer.df<-data.frame(pgmc.df,pgmc.pred.nointer)
+names(pgmc.pred.nointer.df)<-c('incompatibility','battle_deaths_log','rebels_in_conflict','Low','Medium','High','Very High')
+pgmc.pred.nointer.df=pgmc.pred.nointer.df%>%gather(nointer_death_civilians,NointerProbability,4:7)
+pgmc.pred.nointer.df$nointer_death_civilians=factor(pgmc.pred.nointer.df$nointer_death_civilians,levels = c('Low','Medium','High','Very High'))
+
+#Final dataframe
+pgmc.final.df<-data.frame(pgmc.df,pgmc.pred.inter.df$inter_death_civilians,pgmc.pred.inter.df$InterProbability,pgmc.pred.nointer.df$NointerProbability)
+
+#Converting rebels_in_conflicts to categories
+
+pgmc.final.df$rebels_in_conflict_cat<-rep(NA,nrow(pgmc.final.df))
+pgmc.final.df$rebels_in_conflict_cat[pgmc.final.df$rebels_in_conflict<median(pgmc.final.df$rebels_in_conflict)]="Low RG"
+pgmc.final.df$rebels_in_conflict_cat[pgmc.final.df$rebels_in_conflict>=median(pgmc.final.df$rebels_in_conflict)]="High RG"
+
+#Plotting interactions 
+ggplot(pgmc.final.df,aes(x=pgmc.final.df$battle_deaths_log))+geom_smooth(method='lm',aes(y=pgmc.final.df$pgmc.pred.inter.df.InterProbability,color='Interaction'),se=FALSE)+geom_smooth(method='lm',aes(y=pgmc.final.df$pgmc.pred.nointer.df.NointerProbability,color='NoInteraction'),se=FALSE)+facet_grid(pgmc.final.df$incompatibility~pgmc.final.df$pgmc.pred.inter.df.inter_death_civilians+pgmc.final.df$rebels_in_conflict_cat) +
+  labs(title = "Mass Atrocity Likelihood in PGM Groups", x = "Log Battle Deaths", y = "Likelihood of Mass Atrocity Event", subtitle = "Faceted by Incompatibility (Row wise) and Rebel Group Numbers (Column wise)", col = "Interaction Type")+ theme(text = element_text(size = 24))
+
+```
+
+\pagebreak
+
+##Conclusion and Future Work
+
+**Conclusion**
+
+Given a mass atrocity happens, a number of unique factors tend to make it worse. Firstly, the intensity of mass atrocity events is significantly higher when the conflict is involved as a dispute with the government. While more analysis is needed, this could indicative of an observation that mass atrocities by non state actors happen where the government itself is conducting atrocities on civilian population.
+
+Non state actors are clearly driven by group characteristics, especially ethnic memberships and islamist ideologies. NSA Groups that tend to hire based on ethnicity and certain ideologies have a significantly higher chance of making an atrocity worse, as evident by examples such as ISIS in Syria. 
+
+The atrocity behaviors of PGM and Rebel groups are signficantly contrasting. Rebel groups are formed with certain ideologies and tend to target the existing government while PGM groups are usually linked with political parties and tend to participate in territorial disputes.
+
+**Limitations and Future Work**
+
+Our study was limited by the variables of interest we chose. We did not consider the region variable in the model since it correlated with every other variable and it would make greater sense to investigate models separately for each region. Additionally, the consideration of other group variables for PGM sample model (we considered only conflict variables for this) such as separatist might affect the model performance, similarly in case of considering other conflict variables in rebel group samples. Additional future work for the project includes examining separate models on death thresholds. 
+
+\pagebreak
+
+##APPENDIX
+
+**1. Model for Rebel Groups and Conflict Characteristics**
+```{r}
+
+model.rebel.nointer=polr(death_civilian_cat~incompatibility+battle_deaths_log+rebels_in_conflict,data=nsa_rebel,Hess = TRUE)
+display(model.rebel.nointer)
+
+
+model.rebel.inter<-polr(death_civilian_cat~incompatibility*battle_deaths_log*rebels_in_conflict,data=nsa_rebel,Hess = TRUE)
+#summary(model.rebel)
+display(model.rebel.inter)
+
+rebel.df<-expand.grid(incompatibility=c('government','territory'),battle_deaths_log=min(nsa_rebel$battle_deaths_log):max(nsa_rebel$battle_deaths_log),rebels_in_conflict=min(nsa_rebel$rebels_in_conflict):max(nsa_rebel$rebels_in_conflict))
+
+#With interaction
+rebel.pred.inter<-predict(model.rebel.inter,rebel.df,type='probs')
+rebel.pred.inter.df<-data.frame(rebel.df,rebel.pred.inter)
+names(rebel.pred.inter.df)<-c('incompatibility','battle_deaths_log','rebels_in_conflict','Low','Medium','High','Very High')
+rebel.pred.inter.df=rebel.pred.inter.df%>%gather(inter_death_civilians,InterProbability,4:7)
+rebel.pred.inter.df$inter_death_civilians=factor(rebel.pred.inter.df$inter_death_civilians,levels = c('Low','Medium','High','Very High'))
+
+
+#Without interaction
+rebel.pred.nointer<-predict(model.rebel.nointer,rebel.df,type='probs')
+rebel.pred.nointer.df<-data.frame(rebel.df,rebel.pred.nointer)
+names(rebel.pred.nointer.df)<-c('incompatibility','battle_deaths_log','rebels_in_conflict','Low','Medium','High','Very High')
+rebel.pred.nointer.df=rebel.pred.nointer.df%>%gather(nointer_death_civilians,NointerProbability,4:7)
+rebel.pred.nointer.df$nointer_death_civilians=factor(rebel.pred.nointer.df$nointer_death_civilians,levels = c('Low','Medium','High','Very High'))
+
+#Final dataframe
+rebel.final.df<-data.frame(rebel.df,rebel.pred.inter.df$inter_death_civilians,rebel.pred.inter.df$InterProbability,rebel.pred.nointer.df$NointerProbability)
+
+#Converting rebels_in_conflicts to categories
+
+rebel.final.df$rebels_in_conflict_cat<-rep(NA,nrow(rebel.final.df))
+rebel.final.df$rebels_in_conflict_cat[rebel.final.df$rebels_in_conflict<median(rebel.final.df$rebels_in_conflict)]="Low_rebel_Conflicts"
+rebel.final.df$rebels_in_conflict_cat[rebel.final.df$rebels_in_conflict>=median(rebel.final.df$rebels_in_conflict)]="High_rebel_Conflicts"
+
+ggplot(rebel.final.df,aes(x=rebel.final.df$battle_deaths_log))+geom_smooth(method='lm',aes(y=rebel.final.df$rebel.pred.inter.df.InterProbability,color='Interaction'),se=FALSE)+geom_smooth(method='lm',aes(y=rebel.final.df$rebel.pred.nointer.df.NointerProbability,color='NoInteraction'),se=FALSE)+facet_grid(rebel.final.df$incompatibility~rebel.final.df$rebel.pred.inter.df.inter_death_civilians+rebel.final.df$rebels_in_conflict_cat)+xlab('Total_Battle_deaths (log)')+ylab('Probability')+ggtitle('Likelihood of Mass Atrocities in Rebel Groups ')
+```
+
+
+
+**2. Model for regime type and type of conflict**
+```{r}
+model.polr<-polr(death_civilian_cat~group_duration+regime_type_cat+incompatibility,data=nsa1,Hess=TRUE)
+
+df<-expand.grid(regime_type_cat=c('Democracy','Anocracy','Autocracy'),incompatibility=c('government','territory'),group_duration=min(nsa1$group_duration):max(nsa1$group_duration))
+pred<-predict(model.polr,df,type='probs')
+pred.df<-data.frame(df,pred)
+names(pred.df)<-c('regime_type_cat','incompatibility','group_duration','Low','Medium','High','Very High')
+
+#creating a new group
+f=pred.df$incompatibility
+f=recode(f,'territory'=1,'government'=2)
+r=c(0,1,2)
+group=2 * r+f
+group[group==6]='Territory & Democracy'
+group[group==5]='Territory & Anocracy'
+group[group==4]='Territory & Autocracy'
+group[group==3]='Government & Democracy'
+group[group==2]='Government & Anocracy'
+group[group==1]='Government & Autocracy'
+pred.df$Group=factor(group)
+```
+
+```{r}
+pred.df.long=pred.df%>%gather(death_civilians,Probability,4:7)
+pred.df.long$death_civilians=factor(pred.df.long$death_civilians,levels = c('Low','Medium','High','Very High'))
+ggplot(pred.df.long,aes(x=pred.df.long$group_duration,y=Probability,group=Group,color=Group))+geom_line()+facet_grid(~death_civilians)+xlab('Group Duration')
+```
