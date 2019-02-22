@@ -11,11 +11,9 @@ our project aims to answer some key research questions pertaining to these nonst
 ### Basic Terminologies and Data Description
 
 **Non State Actor** : In political science and international relations, a state actor is an individual or an
-entity that is officially recognized or supported by a sovereign government. For example, the United States
-Government or the FBI or CIA are state actors.
-A non state actor is an individual or an entity which has considerable political influence but is not official
-supported by a sovereign government. Notable examples of non state actors include terrorist organizations
+entity that is officially recognized or supported by a sovereign government. For example, the United States Government or the FBI or CIA are state actors. A non state actor is an individual or an entity which has considerable political influence but is not official supported by a sovereign government. Notable examples of non state actors include terrorist organizations
 like ISIS and Al Qaeda.
+
 **Mass Atrocity** : There is no universally accepted definition of a mass atrocity but it generally refers to
 large scale and deliberate attacks on civilian population.
 
