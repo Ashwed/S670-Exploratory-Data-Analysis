@@ -1,4 +1,5 @@
-# NSA-Mass-Atrocities-Data-Analysis
+# Non State Actors (NSA) Mass Atrocities Data Analysis 
+
 **Given that a non state actor commits mass atrocity, what conditions make it worse?**
 
 The recent surge in rebel conflicts such as those by Islamic State in Iraq and Syria (ISIS) has led to an urgent
